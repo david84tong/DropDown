@@ -231,27 +231,6 @@ public final class DropDown: UIView {
 	}
 
 	/**
-	Alias method for `cornerRadius` variable to avoid ambiguity.
-	*/
-	@objc public dynamic func setupCornerRadius(_ radius: CGFloat) {
-		tableViewContainer.layer.cornerRadius = radius
-		tableView.layer.cornerRadius = radius
-		reloadAllComponents()
-	}
-
-	/**
-	The masked corners of DropDown.
-
-	Changing the masked corners automatically reloads the drop down.
-	*/
-	@available(iOS 11.0, *)
-	@objc public dynamic func setupMaskedCorners(_ cornerMask: CACornerMask) {
-		tableViewContainer.layer.maskedCorners = cornerMask
-		tableView.layer.maskedCorners = cornerMask
-		reloadAllComponents()
-	}
-
-	/**
 	The color of the shadow.
 
 	Changing the shadow color automatically reloads the drop down.
@@ -332,15 +311,6 @@ public final class DropDown: UIView {
 		didSet { reloadAllComponents() }
 	}
 
-    /**
-     The color of the text for selected cells of the drop down.
-     
-     Changing the text color automatically reloads the drop down.
-     */
-    @objc public dynamic var selectedTextColor = DPDConstant.UI.SelectedTextColor {
-        didSet { reloadAllComponents() }
-    }
-    
 	/**
 	The font of the text for each cells of the drop down.
 
@@ -512,7 +482,7 @@ private extension DropDown {
 			self.setupUI()
 		}
 
-		tableView.rowHeight = cellHeight
+		//tableView.rowHeight = cellHeight
 		setHiddentState()
 		isHidden = true
 
@@ -711,7 +681,7 @@ extension DropDown {
 		let anchorViewX = anchorView?.plainView.windowFrame?.minX ?? window.frame.midX - (width / 2)
 		let anchorViewY = anchorView?.plainView.windowFrame?.minY ?? window.frame.midY - (tableHeight / 2)
 		
-		let x = anchorViewX + bottomOffset.x
+        let x = anchorViewX + (self.width != nil ? (anchorView!.plainView.bounds.width - self.width!)/2 : bottomOffset.x)
 		let y = anchorViewY + bottomOffset.y
 		
 		let maxY = y + tableHeight
@@ -749,25 +719,34 @@ extension DropDown {
 		
 		return (x, y, width, offscreenHeight)
 	}
+
+    fileprivate func totalTableHeight() -> CGFloat {
+        var totalHeight: CGFloat = 0
+        for value in dataSource {
+            let height = value.heightWithConstrainedWidth(width: self.width ?? 150, font: UIFont.systemFont(ofSize: 17))
+            totalHeight = totalHeight + height
+        }
+        return totalHeight
+    }
 	
 	fileprivate func fittingWidth() -> CGFloat {
-		if templateCell == nil {
-			templateCell = (cellNib.instantiate(withOwner: nil, options: nil)[0] as! DropDownCell)
-		}
-		
-		var maxWidth: CGFloat = 0
-		
-		for index in 0..<dataSource.count {
-			configureCell(templateCell, at: index)
-			templateCell.bounds.size.height = cellHeight
-			let width = templateCell.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).width
-			
-			if width > maxWidth {
-				maxWidth = width
-			}
-		}
-		
-		return maxWidth
+        if templateCell == nil {
+            templateCell = cellNib.instantiate(withOwner: nil, options: nil)[0] as! DropDownCell
+        }
+
+        var maxWidth: CGFloat = 0
+
+        for index in 0..<dataSource.count {
+            configureCell(templateCell, at: index)
+            templateCell.bounds.size.height = cellHeight
+            let width = templateCell.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).width
+
+            if width > maxWidth {
+                maxWidth = width
+            }
+        }
+
+        return maxWidth
 	}
 	
 	fileprivate func constraintWidthToBoundsIfNecessary(layout: inout ComputeLayoutTuple, in window: UIWindow) {
@@ -825,7 +804,7 @@ extension DropDown {
 	- returns: Wether it succeed and how much height is needed to display all cells at once.
 	*/
 	@discardableResult
-    public func show(onTopOf window: UIWindow? = nil, beforeTransform transform: CGAffineTransform? = nil, anchorPoint: CGPoint? = nil) -> (canBeDisplayed: Bool, offscreenHeight: CGFloat?) {
+    public func show(beforeTransform transform: CGAffineTransform? = nil, anchorPoint: CGPoint? = nil) -> (canBeDisplayed: Bool, offscreenHeight: CGFloat?) {
 		if self == DropDown.VisibleDropDown && DropDown.VisibleDropDown?.isHidden == false { // added condition - DropDown.VisibleDropDown?.isHidden == false -> to resolve forever hiding dropdown issue when continuous taping on button - Kartik Patel - 2016-12-29
 			return (true, 0)
 		}
@@ -840,7 +819,7 @@ extension DropDown {
 
 		setNeedsUpdateConstraints()
 
-		let visibleWindow = window != nil ? window : UIWindow.visibleWindow()
+		let visibleWindow = UIWindow.visibleWindow()
 		visibleWindow?.addSubview(self)
 		visibleWindow?.bringSubviewToFront(self)
 
@@ -877,23 +856,10 @@ extension DropDown {
 			},
 			completion: nil)
 
-		accessibilityViewIsModal = true
-		UIAccessibility.post(notification: .screenChanged, argument: self)
-
-		//deselectRows(at: selectedRowIndices)
-		selectRows(at: selectedRowIndices)
+        //deselectRows(at: selectedRowIndices)
+        selectRows(at: selectedRowIndices)
 
 		return (layout.canBeDisplayed, layout.offscreenHeight)
-	}
-
-	public override func accessibilityPerformEscape() -> Bool {
-		switch dismissMode {
-		case .automatic, .onTap:
-			cancel()
-			return true
-		case .manual:
-			return false
-		}
 	}
 
 	/// Hides the drop down.
@@ -923,8 +889,7 @@ extension DropDown {
 
 				self.isHidden = true
 				self.removeFromSuperview()
-				UIAccessibility.post(notification: .screenChanged, argument: nil)
-		})
+			})
 	}
 
 	fileprivate func cancel() {
@@ -955,17 +920,15 @@ extension DropDown {
 	and `cellConfiguration` implicitly calls `reloadAllComponents()`.
 	*/
 	public func reloadAllComponents() {
-		DispatchQueue.executeOnMainThread {
-			self.tableView.reloadData()
-			self.setNeedsUpdateConstraints()
-		}
+		tableView.reloadData()
+		setNeedsUpdateConstraints()
 	}
 
 	/// (Pre)selects a row at a certain index.
-	public func selectRow(at index: Index?, scrollPosition: UITableView.ScrollPosition = .none) {
+	public func selectRow(at index: Index?) {
 		if let index = index {
             tableView.selectRow(
-                at: IndexPath(row: index, section: 0), animated: true, scrollPosition: scrollPosition
+                at: IndexPath(row: index, section: 0), animated: true, scrollPosition: .none
             )
             selectedRowIndices.insert(index)
 		} else {
@@ -991,7 +954,7 @@ extension DropDown {
 			else { return }
         
         // remove from indices
-        if let selectedRowIndex = selectedRowIndices.firstIndex(where: { $0 == index  }) {
+        if let selectedRowIndex = selectedRowIndices.index(where: { $0 == index  }) {
             selectedRowIndices.remove(at: selectedRowIndex)
         }
 
@@ -1019,12 +982,12 @@ extension DropDown {
 
 	/// Returns the height needed to display all cells.
 	fileprivate var tableHeight: CGFloat {
-		return tableView.rowHeight * CGFloat(dataSource.count)
+		return totalTableHeight()//tableView.rowHeight * CGFloat(dataSource.count)
 	}
 
     //MARK: Objective-C methods for converting the Swift type Index
-	@objc public func selectRow(_ index: Int, scrollPosition: UITableView.ScrollPosition = .none) {
-        self.selectRow(at:Index(index), scrollPosition: scrollPosition)
+    @objc public func selectRow(_ index: Int) {
+        self.selectRow(at:Index(index))
     }
     
     @objc public func clearSelection() {
@@ -1048,6 +1011,11 @@ extension DropDown: UITableViewDataSource, UITableViewDelegate {
 		return dataSource.count
 	}
 
+    public func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        let value = dataSource[indexPath.row]
+        return value.heightWithConstrainedWidth(width: self.width ?? 150, font: UIFont.systemFont(ofSize: 17))
+    }
+
 	public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 		let cell = tableView.dequeueReusableCell(withIdentifier: DPDConstant.ReusableIdentifier.DropDownCell, for: indexPath) as! DropDownCell
 		let index = (indexPath as NSIndexPath).row
@@ -1065,8 +1033,6 @@ extension DropDown: UITableViewDataSource, UITableViewDelegate {
 		cell.optionLabel.textColor = textColor
 		cell.optionLabel.font = textFont
 		cell.selectedBackgroundColor = selectionBackgroundColor
-        cell.highlightTextColor = selectedTextColor
-        cell.normalTextColor = textColor
 		
 		if let cellConfiguration = cellConfiguration {
 			cell.optionLabel.text = cellConfiguration(index, dataSource[index])
@@ -1185,12 +1151,11 @@ extension DropDown {
 
 }
 
-private extension DispatchQueue {
-	static func executeOnMainThread(_ closure: @escaping Closure) {
-		if Thread.isMainThread {
-			closure()
-		} else {
-			main.async(execute: closure)
-		}
-	}
+extension String {
+    func heightWithConstrainedWidth(width: CGFloat, font: UIFont) -> CGFloat {
+        let constraintRect = CGSize(width: width, height: .greatestFiniteMagnitude)
+        let boundingBox = self.boundingRect(with: constraintRect, options: .usesLineFragmentOrigin, attributes: [NSAttributedString.Key.font: font], context: nil)
+
+        return ceil(boundingBox.height) + 16
+    }
 }
